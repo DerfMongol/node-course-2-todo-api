@@ -1,13 +1,17 @@
 require('./config/config')
+
 const _ = require('lodash')
 const express = require('express')
 const bodyParser = require('body-parser')
-const {ObjectID} = require('mongodb')
+const { ObjectID } = require('mongodb')
+const { SHA256 } = require('crypto-js')
+const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
 
-const {mongoose} = require('./db/mongoose')
-const {Todo} = require('./models/todo')
-const {User} = require('./models/user')
-const {authenticate} = require('./middleware/authenticate')
+const { mongoose } = require('./db/mongoose')
+const { Todo } = require('./models/todo')
+const { User } = require('./models/user')
+const { authenticate } = require('./middleware/authenticate')
 
 const app = express()
 const port = process.env.PORT || 3000
@@ -28,7 +32,7 @@ app.post('/todos', (req, res) => {
 
 app.get('/todos', (req, res) => {
     Todo.find().then((todos) => {
-        res.send({todos})
+        res.send({ todos })
     }, (e) => {
         res.status(400).send(e)
     })
@@ -36,7 +40,7 @@ app.get('/todos', (req, res) => {
 
 app.get('/todos/:id', (req, res) => {
     const id = req.params.id
-    
+
     if (!ObjectID.isValid(id)) {
         return res.status(404).send()
     }
@@ -44,7 +48,7 @@ app.get('/todos/:id', (req, res) => {
         if (!todo) {
             return res.status(404).send()
         }
-        res.send({todo})
+        res.send({ todo })
     }, (e) => {
         res.status(400).send()
     })
@@ -53,7 +57,7 @@ app.get('/todos/:id', (req, res) => {
 
 app.delete('/todos/:id', (req, res) => {
     const id = req.params.id
-    
+
     if (!ObjectID.isValid(id)) {
         return res.status(404).send()
     }
@@ -61,7 +65,7 @@ app.delete('/todos/:id', (req, res) => {
         if (!todo) {
             return res.status(404).send()
         }
-        res.status(200).send({todo})
+        res.status(200).send({ todo })
     }, (e) => {
         res.status(400).send()
     })
@@ -82,12 +86,12 @@ app.patch('/todos/:id', (req, res) => {
         body.completedAt = null
     }
 
-    Todo.findOneAndUpdate(id, {$set: body}, {new: true}).then((todo) => {
+    Todo.findOneAndUpdate(id, { $set: body }, { new: true }).then((todo) => {
         if (!todo) {
             return res.status(404).send()
         }
 
-        res.send({todo})
+        res.send({ todo })
     }).catch((e) => {
         res.status(400).send()
     })
@@ -97,7 +101,7 @@ app.patch('/todos/:id', (req, res) => {
 app.post('/users', (req, res) => {
     let body = _.pick(req.body, ['email', 'password'])
     const user = new User(body)
- 
+
     user.save().then(() => {
         return user.generateAuthToken()
     }).then((token) => {
@@ -108,14 +112,26 @@ app.post('/users', (req, res) => {
 })
 
 app.get('/users/me', authenticate, (req, res) => {
-   res.send(req.user)
+    res.send(req.user)
+})
+
+app.post('/users/login', (req, res) => {
+    let body = _.pick(req.body, ['email', 'password'])
+    
+    User.findByCredentials(body.email, body.password).then((user) => {
+        return user.generateAuthToken().then((token) => {
+            res.header('x-auth', token).send(user)
+        })
+    }).catch((e) => {
+        res.status(400).send()
+    })
 })
 
 app.listen(port, () => {
     console.log(`Started up at port ${port}`)
 })
 
-module.exports = {app}
+module.exports = { app }
 
 
 
